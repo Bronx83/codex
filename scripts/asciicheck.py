@@ -33,6 +33,13 @@ substitutions: dict[int, str] = {
     0x202F: " ",  # narrow non-breaking space
 }
 
+# Pre-compute translation table for efficient string replacement.
+# Using str.maketrans with character keys for O(n) replacement instead of
+# O(n^2) string concatenation in a loop.
+_substitution_table = str.maketrans(
+    {chr(codepoint): replacement for codepoint, replacement in substitutions.items()}
+)
+
 """
 Unicode codepoints that are allowed in addition to ASCII.
 Be conservative with this list.
@@ -107,15 +114,9 @@ def lint_utf8_ascii(filename: Path, fix: bool) -> bool:
 
     if errors and fix:
         print(f"Attempting to fix {filename}...")
-        num_replacements = 0
-        new_contents = ""
-        for char in text:
-            codepoint = ord(char)
-            if codepoint in substitutions:
-                num_replacements += 1
-                new_contents += substitutions[codepoint]
-            else:
-                new_contents += char
+        # Use str.translate() for O(n) replacement instead of O(n^2) string concatenation
+        new_contents = text.translate(_substitution_table)
+        num_replacements = sum(1 for char in text if ord(char) in substitutions)
         with open(filename, "w", encoding="utf-8") as f:
             f.write(new_contents)
         print(f"Fixed {num_replacements} of {len(errors)} errors in {filename}.")
